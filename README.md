@@ -1,77 +1,197 @@
-# Developer Evaluation Project
+# Developer Evaluation Project - Sales API
 
-`READ CAREFULLY`
+This repository contains the implementation of the DeveloperStore sales records API.
 
-## Use Case
-**You are a developer on the DeveloperStore team. Now we need to implement the API prototypes.**
+The solution was implemented on top of the provided .NET template, following a layered architecture with DDD concepts, MediatR, Entity Framework Core and PostgreSQL.
 
-As we work with `DDD`, to reference entities from other domains, we use the `External Identities` pattern with denormalization of entity descriptions.
+## Implemented Use Case
 
-Therefore, you will write an API (complete CRUD) that handles sales records. The API needs to be able to inform:
+The API provides a complete CRUD for sales records and supports the following information:
 
-* Sale number
-* Date when the sale was made
-* Customer
-* Total sale amount
-* Branch where the sale was made
-* Products
-* Quantities
-* Unit prices
-* Discounts
-* Total amount for each item
-* Cancelled/Not Cancelled
+- Sale number
+- Sale date
+- Customer external identity and denormalized customer name
+- Branch external identity and denormalized branch name
+- Products external identity and denormalized product name
+- Quantity, unit price, discount and item total
+- Sale total amount
+- Cancelled / not cancelled status for sales and items
 
-It's not mandatory, but it would be a differential to build code for publishing events of:
-* SaleCreated
-* SaleModified
-* SaleCancelled
-* ItemCancelled
+The Customer, Branch and Product references use the **External Identities** pattern: the API stores the external id and the denormalized description/name instead of creating foreign keys to other domain aggregates.
 
-If you write the code, **it's not required** to actually publish to any Message Broker. You can log a message in the application log or however you find most convenient.
+## Business Rules
 
-### Business Rules
+Quantity-based discounts are enforced in the domain layer:
 
-* Purchases above 4 identical items have a 10% discount
-* Purchases between 10 and 20 identical items have a 20% discount
-* It's not possible to sell above 20 identical items
-* Purchases below 4 items cannot have a discount
+| Quantity | Discount |
+| --- | --- |
+| 1 to 3 identical items | 0% |
+| 4 to 9 identical items | 10% |
+| 10 to 20 identical items | 20% |
+| Above 20 identical items | Not allowed |
 
-These business rules define quantity-based discounting tiers and limitations:
+The sale total is calculated from the non-cancelled items.
 
-1. Discount Tiers:
-   - 4+ items: 10% discount
-   - 10-20 items: 20% discount
+## Domain Events
 
-2. Restrictions:
-   - Maximum limit: 20 items per product
-   - No discounts allowed for quantities below 4 items
+The project includes MediatR notifications for the requested sales events:
 
-## Overview
-This section provides a high-level overview of the project and the various skills and competencies it aims to assess for developer candidates. 
+- `SaleCreated`
+- `SaleModified`
+- `SaleCancelled`
+- `ItemCancelled`
 
-See [Overview](/.doc/overview.md)
+No message broker is required. The current implementation logs these events in the application log.
 
 ## Tech Stack
-This section lists the key technologies used in the project, including the backend, testing, frontend, and database components. 
 
-See [Tech Stack](/.doc/tech-stack.md)
-
-## Frameworks
-This section outlines the frameworks and libraries that are leveraged in the project to enhance development productivity and maintainability. 
-
-See [Frameworks](/.doc/frameworks.md)
-
-<!-- 
-## API Structure
-This section includes links to the detailed documentation for the different API resources:
-- [API General](./docs/general-api.md)
-- [Products API](/.doc/products-api.md)
-- [Carts API](/.doc/carts-api.md)
-- [Users API](/.doc/users-api.md)
-- [Auth API](/.doc/auth-api.md)
--->
+- .NET 8
+- ASP.NET Core Web API
+- Entity Framework Core
+- PostgreSQL
+- MediatR
+- FluentValidation
+- AutoMapper from the base template
+- xUnit / FluentAssertions / NSubstitute
+- Docker Compose
+- Swagger/OpenAPI
 
 ## Project Structure
-This section describes the overall structure and organization of the project files and directories. 
 
-See [Project Structure](/.doc/project-structure.md)
+```text
+.template/backend
+├── src
+│   ├── Ambev.DeveloperEvaluation.Domain
+│   │   ├── Entities
+│   │   ├── Events
+│   │   └── Repositories
+│   ├── Ambev.DeveloperEvaluation.Application
+│   │   └── Sales
+│   ├── Ambev.DeveloperEvaluation.ORM
+│   │   ├── Mapping
+│   │   ├── Migrations
+│   │   └── Repositories
+│   ├── Ambev.DeveloperEvaluation.IoC
+│   └── Ambev.DeveloperEvaluation.WebApi
+│       └── Features/Sales
+└── tests
+    └── Ambev.DeveloperEvaluation.Unit
+```
+
+## How to Run with Docker
+
+From the backend folder:
+
+```bash
+cd template/backend
+docker compose up --build
+```
+
+The API will be available at:
+
+```text
+http://localhost:8080/swagger
+```
+
+The PostgreSQL database is exposed locally at port `5432`.
+
+## How to Run Locally
+
+Requirements:
+
+- .NET 8 SDK
+- PostgreSQL
+
+Start PostgreSQL using Docker:
+
+```bash
+cd template/backend
+docker compose up -d ambev.developerevaluation.database
+```
+
+Restore, build and run the API:
+
+```bash
+dotnet restore Ambev.DeveloperEvaluation.sln
+dotnet build Ambev.DeveloperEvaluation.sln
+dotnet ef database update \
+  --project src/Ambev.DeveloperEvaluation.ORM \
+  --startup-project src/Ambev.DeveloperEvaluation.WebApi
+dotnet run --project src/Ambev.DeveloperEvaluation.WebApi
+```
+
+Swagger will be available at the URL shown in the terminal, usually:
+
+```text
+https://localhost:7181/swagger
+```
+
+## How to Run Tests
+
+From the backend folder:
+
+```bash
+cd template/backend
+dotnet test Ambev.DeveloperEvaluation.sln
+```
+
+To generate the coverage report using the existing template scripts:
+
+```bash
+./coverage-report.sh
+```
+
+On Windows:
+
+```bat
+coverage-report.bat
+```
+
+## Sales API Endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/api/sales` | Creates a sale |
+| GET | `/api/sales` | Lists sales |
+| GET | `/api/sales/{id}` | Gets a sale by id |
+| PUT | `/api/sales/{id}` | Updates a sale |
+| DELETE | `/api/sales/{id}` | Deletes a sale |
+| PATCH | `/api/sales/{id}/cancel` | Cancels a sale |
+| PATCH | `/api/sales/{saleId}/items/{itemId}/cancel` | Cancels one sale item |
+
+## Create Sale Example
+
+```json
+{
+  "saleNumber": "SALE-0001",
+  "saleDate": "2026-05-24T10:00:00Z",
+  "customerId": "4b7f9c70-5db4-4a4f-babc-77e3a450d123",
+  "customerName": "John Doe",
+  "branchId": "d3d2e5b8-7c95-4f7a-91ff-c84eaa502111",
+  "branchName": "Main Branch",
+  "items": [
+    {
+      "productId": "80b31a21-2d42-4119-91c7-112233445566",
+      "productName": "Keyboard",
+      "quantity": 10,
+      "unitPrice": 100
+    }
+  ]
+}
+```
+
+Expected calculated values:
+
+```text
+Discount percentage: 20%
+Discount amount: 200
+Item total: 800
+Sale total: 800
+```
+
+## Notes
+
+- Discount calculation is not accepted from the request body. It is calculated by the domain model.
+- Quantities above 20 throw a business exception.
+- Cancelling an item recalculates the sale total.
+- Cancelling a sale cancels all its items and sets the sale total to zero.
